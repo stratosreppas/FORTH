@@ -85,7 +85,7 @@ class Markovian(gym.Env, Game):
     @property
     def get_reward(self):
         """
-        Returns the reward for the current state.
+            Returns the reward for the current state.
         """
         return self.utility(self.state)
 
