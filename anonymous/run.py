@@ -21,7 +21,8 @@ parser.add_argument('--actions', default=2, help='The number of actions')
 parser.add_argument('--players', default=40, help='The number of players')
 parser.add_argument('--utility', default='gaussian', help='')
 parser.add_argument("--cost", default=0.1, help="The cost of the game")
-parser.add_argument('--pure_nash', default=False, help='Find pure Nash equilibria')
+parser.add_argument('--epsilon', default=0.1, help='The epsilon for the approximate Nash equilibria')
+parser.add_argument('--pure_nash', default=True, help='Find approximate pure Nash equilibria')
 
 
 def get_utility(utility, players, actions, cost):
@@ -46,11 +47,12 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     name = args.name
-    actions = args.actions
-    players = args.players
+    actions = int(args.actions)
+    players = int(args.players)
     utility = args.utility
-    pure_nash = args.pure_nash
-    cost = args.cost
+    cost = float(args.cost)
+    epsilon = float(args.epsilon)
+    pure_nash = bool(args.pure_nash)
 
     utility_function = get_utility(utility, players, actions, cost)
     # # Plot the utility functions of the first couple of players
@@ -61,4 +63,5 @@ if __name__ == '__main__':
     #     plt.show()
 
     game = AnonymousGame(name, actions, players, utility_function)
-    print(game.pure_nash())
+    if pure_nash:
+        print(game.pure_nash(epsilon))
