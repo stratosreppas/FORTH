@@ -93,7 +93,7 @@ class MaxFlowGraph:
         plt.show()
 
 
-def permutations(players, actions):
+def compositions(players, actions):
     '''
     Returns all the permutations of players into sets of cardinality of the number of actions
     '''
@@ -102,7 +102,9 @@ def permutations(players, actions):
     else:
         pi = []
         for i in range(players+1):
-            sub_permutations = permutations(players-i, actions-1)
+            sub_permutations = compositions(players-i, actions-1)
             for sub_permutation in sub_permutations:
                 pi.append([i] + sub_permutation)
         return pi
+
+

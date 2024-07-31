@@ -5,5 +5,5 @@ class Game():
         self.players = players
         self.utility = utility
 
-    def check_nash():
+    def find_nash():
         pass

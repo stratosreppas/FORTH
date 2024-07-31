@@ -1,5 +1,6 @@
-numpy>=2.0.0
+numpy<2
 gymnasium>=0.29.1
 pettingzoo>=1.24.3
 stable_baselines3>=2.3.2
 scipy>=1.14.0
+tensorboard>=2.17.0
