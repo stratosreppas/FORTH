@@ -10,20 +10,18 @@ from games.game import Game
 
 class Markovian(gym.Env, Game):
     
-    def __init__(self, name, actions, players, utility):
-        super().__init__(name, actions, players, utility)
+    def __init__(self, name, players):
+        super().__init__(name, players)
 
         self.state = self.get_initial_state()
         self.observation_space = self.get_observation_space() # The multi-agent observation space will be set in the get_observation_space() function
-        self.action_space = gym.spaces.Discrete(self.actions) # We assume that the agents have the same actions (2 in our case)
+        self.action_space = gym.spaces.Discrete(self.n_actions) # We assume that the agents have the same actions (2 in our case)
         self.current_step = 0
         self.seed()
 
-        logging.info("Markovian game created")
+        logging.info("Markovian game created!")
         logging.info("Name: " + str(self.name))
-        logging.info("Actions: " + str(self.actions))
-        logging.info("Players: " + str(self.players))
-        logging.info("Utility: " + str(self.utility))
+        logging.info("Players: " + str(self.n_players))
         logging.info("Initial state: " + str(self.state))
         logging.info("Observation space: " + str(self.observation_space))
 
@@ -38,15 +36,16 @@ class Markovian(gym.Env, Game):
 
         self.info = {}
 
-        for player in range(self.players):
+        for i, player in enumerate(self.players):
             self.done.append(False)
-            self.info[player] = {}
-            self.info[player]["total_reward"] = 0
-            self.info[player]["total_reward_episode"] = 0
-            self.info[player]["total_reward_episode_list"] = []
-            self.info[player]["total_reward_list"] = []
-            self.info[player]["total_reward_episode_list"].append(0)
-            self.info[player]["total_reward_list"].append(0)
+            self.info[i] = {}
+            self.info[i]["total_reward"] = 0
+            self.info[i]["total_reward_episode"] = 0
+            self.info[i]["total_reward_episode_list"] = []
+            self.info[i]["total_reward_list"] = []
+            self.info[i]["total_reward_episode_list"].append(0)
+            self.info[i]["total_reward_list"].append(0)
+            self.info[i]['actions'] = self.actions
 
 
     def seed(self, seed=None):
@@ -82,10 +81,10 @@ class Markovian(gym.Env, Game):
         self.total_reward = 0
 
         # episode over
-        self.done = [False for _ in range(self.players)]
+        self.done = [False for _ in range(self.n_players)]
         self.info = {}
 
-        return np.array(self.get_state()), self.info
+        return self.normalized_state(self.get_state()), self.info
     
     def render(self, mode='human', close=False):
         """
@@ -115,6 +114,11 @@ class Markovian(gym.Env, Game):
         Custom reset function for the game. 
         """
         pass
+
+
+    def normalized_state(self, state):
+        return (state-self.observation_space.low)/(self.observation_space.high - self.observation_space.low)
+
 
     
 

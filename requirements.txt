@@ -1,6 +1,14 @@
+# Using a conda virtual environment and Python 3.10.14
 numpy<2
-gymnasium>=0.29.1
+gymnasium>=0.28.1
 pettingzoo>=1.24.3
 stable_baselines3>=2.3.2
-scipy>=1.14.0
 tensorboard>=2.17.0
+sb3_contrib>=2.3.0
+gym>=0.26.2
+supersuit>=3.9.2
+scikit-learn>=1.5.1
+ray[rllib]>=2.34.0
+pygame>=2.6.0
+pymunk>=6.8.1
+SALib>=1.5.0

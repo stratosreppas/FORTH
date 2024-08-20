@@ -1,6 +1,10 @@
+from abc import abstractmethod
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import logging
 import sys
 import os
 import copy
+import threading
 import numpy as np
 
 try:
@@ -10,17 +14,26 @@ except:
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from games.game import Game
-from global_utils import normalize, gaussian
+from games.player import Player
 
-class AnonymousGame(Game):
+logging.basicConfig(filename='run.log', level=logging.INFO)
+
+
+NOT_FIRE = 0
+FIRE = 1
+
+class Anonymous(Game):
     '''
     Below is an implementation of Daskalakis PTAS algorithms for anonymous games.
     The algorithm is described in the following paper:
     "Approximate Nash Equilibria in Anonymous Games" by Constantinos Daskalakis.
     https://people.csail.mit.edu/costis/anonymousJET.pdf
     '''
-    def __init__(self, name='AnonymousGame', actions=2, players=100, utility='gaussian', cost=0.1):
-        super().__init__(name, actions, players, self.get_utility(utility, players, actions, cost))
+    def __init__(self, players, name='AnonymousGame'):
+        super().__init__(name, players)
+        
+        if all(n_actions == 2 for n_actions in self.n_actions):
+            self.n_actions = self.n_actions[0] # We must assume that each player has the same number of actions
 
     def pure_nash(self, epsilon=0.1):
         '''
@@ -29,7 +42,7 @@ class AnonymousGame(Game):
         equilibria = []
 
         # Create the partitions of the players into sets of number of actions cardinality
-        partitions = compositions(self.players, self.actions)
+        partitions = compositions(self.n_players, self.n_actions)
         sigma = [0, 1]
 
         for theta in partitions:
@@ -47,20 +60,20 @@ class AnonymousGame(Game):
         print(k)
 
         # Step 2
-        for t in range(1, self.players+1): # This is the number of players that play mixed strategies 
-            for t0 in range(self.players-t): # This is the number of players that only play the first action (0) - not fire
-                t1 = self.players - t - t0 # This is the number of players that only play the second action (1) - fire
-                t = self.players
+        for t in range(1, self.n_players+1): # This is the number of players that play mixed strategies 
+            for t0 in range(self.n_players-t): # This is the number of players that only play the first action (0) - not fire
+                t1 = self.n_players - t - t0 # This is the number of players that only play the second action (1) - fire
+                t = self.n_players
                 t0 = 0
                 t1 = 0
                 # Step 3a
                 if(t > k**3):
                     print('a')
                     print('t0:', t0, 't1:', t1, 't:', t)
-                    for i in range(1, k*self.players+1):
+                    for i in range(1, k*self.n_players+1):
                         # So far, we have a complexity of O(kn^3)
                         # Choose an integer multiple (j) of 1/(kn)
-                        q = i/(k*self.players)
+                        q = i/(k*self.n_players)
 
                         theta = [t0, t1, t]
                         sigma = [0, 1, q]
@@ -72,27 +85,27 @@ class AnonymousGame(Game):
                         print('Done computing expected utilities!')
 
                         # Create the max flow graph
-                        g = MaxFlowGraph(self.players+len(sigma)+2) # {[n] U σ = {0,1,q} U {s,t}}
+                        g = MaxFlowGraph(self.n_players+len(sigma)+2) # {[n] U σ = {0,1,q} U {s,t}}
 
                         source = 0
-                        target = self.players + len(sigma) + 1
+                        target = self.n_players + len(sigma) + 1
 
                         # Creation of the N edges from s to [n] with capacity 1
-                        for player in range(1,self.players+1):
+                        for player in range(1,self.n_players+1):
                             g.addEdge(source, player, 1)
                         
                         # Creation of the O(N) edges from [n] to σ = {0,1,q} with capacity 1
-                        for player in range(1, self.players+1):
+                        for player in range(1, self.n_players+1):
                             max_utility = max(exp_utility[player-1][strategy] for strategy in sigma)
                             for i, strategy in enumerate(sigma):
                                 if(theta[i] > 0 and max_utility - exp_utility[player-1][strategy] <= epsilon):
-                                    g.addEdge(player, self.players + 1 + i, 1)
+                                    g.addEdge(player, self.n_players + 1 + i, 1)
                         
                         # Creation of the |σ| edges from σ = {0,1,q} to t with capacity θ_σ
                         for strategy, partition in enumerate(theta):
-                            g.addEdge(self.players + 1 + strategy, target, partition)
+                            g.addEdge(self.n_players + 1 + strategy, target, partition)
 
-                        if g.DinicMaxflow(source, target) == self.players:
+                        if g.DinicMaxflow(source, target) == self.n_players:
                             equilibria.append(sigma)
                             print(sigma)
                             # break                
@@ -116,27 +129,27 @@ class AnonymousGame(Game):
                             exp_utility = self.compute_exp_utilities(theta, sigma)
                             print('Done computing expected utilities!')                            
                             # Create the max flow graph
-                            g = MaxFlowGraph(self.players+len(sigma)+2) # {[n] U σ = {0,1,q} U {s,t}}
+                            g = MaxFlowGraph(self.n_players+len(sigma)+2) # {[n] U σ = {0,1,q} U {s,t}}
 
                             source = 0
-                            target = self.players + len(sigma) + 1
+                            target = self.n_players + len(sigma) + 1
 
                             # Creation of the N edges from s to [n] with capacity 1
-                            for player in range(1,self.players+1):
+                            for player in range(1,self.n_players+1):
                                 g.addEdge(source, player, 1)
                             
                             # Creation of the O(N) edges from [n] to σ = {0,1,q} with capacity 1
-                            for player in range(1, self.players+1):
+                            for player in range(1, self.n_players+1):
                                 max_utility = max(exp_utility[player-1][strategy] for strategy in sigma)
                                 for i, strategy in enumerate(sigma):
                                     if(theta[i] > 0 and max_utility - exp_utility[player-1][strategy] <= epsilon):
-                                        g.addEdge(player, self.players + 1 + i, 1)
+                                        g.addEdge(player, self.n_players + 1 + i, 1)
                             
                             # Creation of the |σ| edges from σ = {0,1,q} to t with capacity θ_σ
                             for strategy, partition in enumerate(theta):
-                                g.addEdge(self.players + 1 + strategy, target, partition)
+                                g.addEdge(self.n_players + 1 + strategy, target, partition)
 
-                            if g.DinicMaxflow(source, target) == self.players:
+                            if g.DinicMaxflow(source, target) == self.n_players:
                                 equilibria.append(sigma)
                                 print(sigma)
                                 break
@@ -164,7 +177,7 @@ class AnonymousGame(Game):
         Returns:
         exp_utilities (list): The expected utilities of the players for the various strategies
         '''
-        T = [[0 for _ in range(self.players)] for _ in range(self.players-1)]
+        T = [[0 for _ in range(self.n_players)] for _ in range(self.n_players-1)]
         delta = [] # It signifies the probability of a player to play the second action (1) - fire
         # Initialization of delta
         for i, players in enumerate(theta):
@@ -177,7 +190,7 @@ class AnonymousGame(Game):
         for strategy in sigma:
             # We will remove the strategy of the player that we examine
             if strategy not in delta:
-                probs[strategy] = [0 for _ in range(self.players)]
+                probs[strategy] = [-1 for _ in range(self.n_players)]
                 continue
 
             delta.remove(strategy)
@@ -189,42 +202,78 @@ class AnonymousGame(Game):
             # Recursive dp formula
             # The final row of the dp table contains the probabilities of the players to play the second action (1) - fire
             # if the player that we examine plays the strategy that we are considering
-            for i in range(1, self.players-1):
-                for l in range(self.players):
-                    if (0 < l < i):
+            for i in range(1, self.n_players-1):
+                for l in range(self.n_players):
+                    if (0 < l < i+1):
                         T[i][l] = delta[i]*T[i-1][l-1] + (1-delta[i])*T[i-1][l]
 
-                    elif (l == i):
+                    elif (l == i+1):
                         T[i][l] = delta[i]*T[i-1][l-1]
 
                     elif (l == 0): 
                         T[i][l] = (1-delta[i])*T[i-1][l]
 
-                    elif (l > i):
+                    elif (l > i+1):
                         T[i][l] = 0
         
             # Add the removed strategy back to delta to be considered in the next iteration
             delta.append(strategy)
+            # print(T)
 
             # We store it in the probs list 
-            probs[strategy] = T[self.players-2]
+            probs[strategy] = T[self.n_players-2]
             # print(probs[strategy], strategy)
-             
+                     
         # Calculate the expected utilities of the players for the various strategies    
-        exp_utilities = [{}  for _ in range(self.players)]
-        for i in range(self.players):
+        exp_utilities = [{}  for _ in range(self.n_players)]
+        for i in range(self.n_players):
+            max_strategy = sigma[0]
             for strategy in sigma:
-                exp_utilities[i][strategy] = strategy * np.dot(self.utility[i][1], np.array(probs[strategy])) + (1-strategy) * np.dot(self.utility[i][0], np.array(probs[strategy]))
+                # print(sigma)
+                exp_utilities[i][strategy] = strategy * np.dot(self.utility[i][FIRE], np.array(probs[strategy])) + (1-strategy) * np.dot(self.utility[i][NOT_FIRE], np.array(probs[strategy]))
+                if(exp_utilities[i][strategy] > exp_utilities[i][max_strategy]):
+                    max_strategy = strategy
+                    # print(max_strategy)
                 # if(i == 1 and (strategy == 0 or strategy == 1)): 
-                #     print(exp_utilities[i][strategy], strategy)
+            for strategy in sigma:
+                if(exp_utilities[i][strategy]<0):
+                    exp_utilities[i][strategy] = strategy * np.dot(self.utility[i][FIRE], np.array(probs[max_strategy])) + (1-strategy) * np.dot(self.utility[i][NOT_FIRE], np.array(probs[max_strategy]))
+                # print(exp_utilities[i][strategy], strategy)
+
         return exp_utilities
     
-    def lets_see(self, epsilon=0.1, n_probs=5):
+    def mixed_nash_parallelised(self, epsilon=0.1, n_probs=5, num_threads=8):
+        sigma = [i/n_probs for i in range(1, n_probs+1)]
+        print('Computing compositions')
+        thetas = compositions(self.n_players, n_probs)
+        print('Done computing compositions')
+
+        def process_theta(theta):
+            if self.find_nash(theta, sigma, epsilon):
+                return theta
+            return None
+
+        equilibria = []
+        lock = threading.Lock()  # Create a lock object
+
+        with ThreadPoolExecutor(max_workers=num_threads) as executor:
+            future_to_theta = {executor.submit(process_theta, theta): theta for theta in thetas}
+            
+            for future in as_completed(future_to_theta):
+                result = future.result()
+                if result is not None:
+                    with lock:  # Ensure only one thread can modify the list at a time
+                        equilibria.append(result)
+
+        return equilibria
+    
+    def mixed_nash(self, epsilon=0.1, n_probs=5):
         
         sigma=[i/n_probs for i in range(1, n_probs+1)]
         print('Computing compositions')
-        thetas = compositions(self.players, n_probs)
-        print(len(thetas))
+        thetas = compositions(self.n_players, n_probs)
+        print('Done computing compositions')
+        # print(len(thetas))
         equilibria = []
         for theta in thetas:
             if self.find_nash(theta, sigma, epsilon):
@@ -252,41 +301,29 @@ class AnonymousGame(Game):
         # print('Done computing expected utilities!')
 
         # print('Solving the max flow problem') 
-        g = MaxFlowGraph(self.players+len(sigma)+2) # {[n] U σ U {s,t}}
+        g = MaxFlowGraph(self.n_players+len(sigma)+2) # {[n] U σ U {s,t}}
 
         source = 0
-        target = self.players + len(sigma) + 1
+        target = self.n_players + len(sigma) + 1
 
         # Creation of the N edges from s to [n] with capacity 1
-        for player in range(1,self.players+1):
+        for player in range(1,self.n_players+1):
             g.addEdge(source, player, 1)
         
         # Creation of the O(N) edges from [n] to σ with capacity 1
-        for player in range(1, self.players+1):
+        for player in range(1, self.n_players+1):
             max_utility = max(exp_utility[player-1][strategy] for strategy in sigma)
             for i, strategy in enumerate(sigma):
+                # print(exp_utility[player-1][strategy], strategy)
                 if(theta[i] > 0 and max_utility - exp_utility[player-1][strategy] <= epsilon):
-                    g.addEdge(player, self.players + 1 + i, 1)
+                    # print(exp_utility[player-1][strategy], strategy)
+                    g.addEdge(player, self.n_players + 1 + i, 1)
         
         # Creation of the |σ| edges from σ to t with capacity θ_σ
         for strategy, partition in enumerate(theta):
-            g.addEdge(self.players + 1 + strategy, target, partition)
+            g.addEdge(self.n_players + 1 + strategy, target, partition)
 
-        return(g.DinicMaxflow(source, target) == self.players)
+        # g.plot_graph()
+
+        return(g.DinicMaxflow(source, target) == self.n_players)
     
-    def get_utility(self, utility, players, actions, cost):
-        utility_function = np.zeros((players, actions, players))
-        for player in range(players):
-            if utility == 'gaussian':
-                mean = np.random.randint(players)
-                sigma = (20-10)*np.random.random_sample() + 10 # select sigma between 1 and 2
-                utility_function[player][0] = np.array(gaussian(players, mean, sigma))
-                utility_function[player][1] =np.array(gaussian(players, mean+1, sigma)) - cost
-                utility_function[player] = normalize(utility_function[player])
-            elif utility == 'uniform':
-                return np.random.rand(players, actions)
-            elif utility == 'random':
-                return np.random.randint(0, 100, size=(players, actions))
-            else:
-                return np.zeros((players, actions))
-        return utility_function

@@ -5,9 +5,10 @@ from gymnasium import spaces
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from games.game import Game
-from markovian.markovian import Markovian
-from anonymous.anonymous import AnonymousGame
+from games.markovian.markovian import Markovian
+from instances.L4_anonymous import L4Anonymous
 from global_utils import indicator_function, normalize
+from games.player import Player
 
 
 # STATES
@@ -35,27 +36,30 @@ FIRE = 1
 MAX_STEPS = 25
 
 
-class Player():
-    def __init__(self, name, actions):
-        self.name = name
-        self.actions = actions
-        self.angle = np.random.randint(ANGLE_0, ANGLE_225)
-        self.a = np.random.uniform(0, 1)
+class L23Neuron(Player):
+    def __init__(self, name, actions, utility):
+        super().__init__(name, actions, utility)
+        self.angle = np.random.randint(ANGLE_0, ANGLE_337_5)
+        self.a = np.random.random_sample()
+
+
+        def utility_function(self, state, action, environment):
+            return self.a*indicator_function(abs(action - indicator_function(environment['angle']!=self.angle))>0) - self.cost*indicator_function(action==FIRE)
+
 
 
 class L23Markovian(Markovian):
 
-    def __init__(self, name='L23Markovian', actions=2, L23players=1, L4players=100, utility=None, cost=0.1):
-        self.anonymous = AnonymousGame(players=L4players)
+    def __init__(self, name='L23Markovian', L23players=1, L4players=100, L4utility={'type': 'gaussian', 'cost': 0.1}):
+        self.anonymous = L4Anonymous(players=L4players, utility=L4utility)
         self.L4_neurons = L4players
         self.neurons = L23players
         self.neuron = Player('neuron', actions)
         print('Neuron', self.neuron.angle)
         self.equilibrium = []
         self.environment = {}
-        self.cost = cost
         
-        super().__init__(name, actions, L23players, utility)
+        super().__init__(name, actions, L23players, self.neuron.utility)
  
 
     def get_observation_space(self):
@@ -65,8 +69,9 @@ class L23Markovian(Markovian):
             dtype=np.float32
         )
 
+
     def get_state(self):
-        angle = np.random.randint(ANGLE_0, ANGLE_225)
+        angle = np.random.randint(ANGLE_0, ANGLE_337_5)
         self.environment['angle'] = angle
         coffirings = np.random.binomial(n=self.L4_neurons, p=1/16) # L4 output if they fire completely at random
         # print('Coffirings', coffirings)
@@ -76,8 +81,6 @@ class L23Markovian(Markovian):
     def get_initial_state(self):
         return self.reset()
     
-    def normalized_state(self, state):
-        return (state-self.observation_space.low)/(self.observation_space.high - self.observation_space.low)
 
     def step(self, action):
         """
@@ -100,19 +103,14 @@ class L23Markovian(Markovian):
         # print('State', state)
         # print('Environment', environment)
         # print('Action', action)       
-        return player.a*indicator_function(abs(action - indicator_function(environment['angle']!=player.angle))>0) - self.cost*indicator_function(action==FIRE)
+        return player.utility_function(state, action, environment)
+    
     
     def get_reward(self, action):
         """
         Get the reward for the current state.
         """
         return self.utility_function(self.state, action, self.neuron, self.environment)
-    
-
-    def custom_reset(self):
-        equilibria = self.anonymous.pure_nash()
-        self.equilibrium = equilibria[np.random.choice(len(self.anonymous.pure_nash()))]
-
 
     
 

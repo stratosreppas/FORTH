@@ -1,10 +1,11 @@
-from anonymous import AnonymousGame
+from anonymous import Anonymous
 import argparse
 import numpy as np
 from scipy.stats import norm
 import sys
 import os
 import matplotlib.pyplot as plt
+from instances.L4_anonymous import L4Anonymous
 
 sys.setrecursionlimit(2000)
 
@@ -41,7 +42,7 @@ if __name__ == '__main__':
     pure_nash = bool(args.pure_nash)
     plot = bool(args.plot)
 
-    game = AnonymousGame(name, actions, players, utility, cost)
+    game = Anonymous(name, actions, players, utility, cost)
         # Plot the utility functions of the first couple of players
     
     if plot:
